@@ -3,6 +3,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import * as MessageTray from "resource:///org/gnome/shell/ui/messageTray.js";
 import { InjectionManager } from "resource:///org/gnome/shell/extensions/extension.js";
 
+import { BannerVisibilityAdapter } from "../managers/message-tray/banner-visibility.js";
 import { FullscreenAdapter } from "../managers/message-tray/fullscreen.js";
 import { IdleAdapter } from "../managers/message-tray/idle.js";
 import { MessageTrayManager } from "../managers/message-tray/manager.js";
@@ -12,6 +13,7 @@ import { UrgencyAdapter } from "../managers/source/urgency.js";
 
 import { SourceManager } from "../managers/source/manager.js";
 import { ProcessingAdapter } from "../managers/source/processing.js";
+import { RemovalAdapter } from "../managers/source/removal.js";
 
 import type {
   Position,
@@ -30,19 +32,26 @@ export class NotificationsManager {
   private messageTrayManager: MessageTrayManager;
   private sourceManager: SourceManager;
 
+  private bannerVisibilityAdapter: BannerVisibilityAdapter;
   private fullscreenAdapter: FullscreenAdapter;
   private idleAdapter: IdleAdapter;
   private timeoutAdapter: TimeoutAdapter;
   private urgencyAdapter: UrgencyAdapter;
   private processingAdapter: ProcessingAdapter;
+  private removalAdapter: RemovalAdapter;
 
   constructor(settingsManager: SettingsManager) {
     this.messageTrayManager = new MessageTrayManager(settingsManager);
     this.sourceManager = new SourceManager(settingsManager);
 
+    this.removalAdapter = new RemovalAdapter(settingsManager);
+    this.bannerVisibilityAdapter = new BannerVisibilityAdapter(
+      settingsManager,
+      this.removalAdapter,
+    );
     this.fullscreenAdapter = new FullscreenAdapter(settingsManager);
     this.idleAdapter = new IdleAdapter(settingsManager);
-    this.timeoutAdapter = new TimeoutAdapter(settingsManager);
+    this.timeoutAdapter = new TimeoutAdapter(settingsManager, this.removalAdapter);
     this.urgencyAdapter = new UrgencyAdapter(settingsManager);
     this.processingAdapter = new ProcessingAdapter(settingsManager);
 
@@ -51,10 +60,13 @@ export class NotificationsManager {
     this.timeoutAdapter.register(this.messageTrayManager);
     this.urgencyAdapter.register(this.sourceManager);
     this.processingAdapter.register(this.sourceManager);
+    this.removalAdapter.register(this.sourceManager);
 
     this.setupPositioning(settingsManager);
 
     this.enable();
+    // Enable banner visibility adapter after other patches
+    this.bannerVisibilityAdapter.enable();
   }
 
   private positionSignalId?: number;
@@ -139,7 +151,7 @@ export class NotificationsManager {
       proto,
       "_hideNotification",
       (original) =>
-        function (this: MessageTray.MessageTrayProto, animate) {
+        function (this: MessageTray.MessageTrayProto, animate: boolean) {
           if (self.isVerticalAlignTop()) {
             original.call(this, animate);
             return;
@@ -250,11 +262,13 @@ export class NotificationsManager {
       this.positionSignalId = undefined;
     }
 
+    this.bannerVisibilityAdapter.dispose();
     this.fullscreenAdapter.dispose();
     this.idleAdapter.dispose();
     this.timeoutAdapter.dispose();
     this.urgencyAdapter.dispose();
     this.processingAdapter.dispose();
+    this.removalAdapter.dispose();
 
     this.messageTrayManager.dispose();
     this.sourceManager.dispose();

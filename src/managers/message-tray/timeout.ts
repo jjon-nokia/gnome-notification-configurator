@@ -1,19 +1,39 @@
 import type { SettingsManager } from "../../utils/settings.js";
 import type { UpdateNotificationTimeoutHook } from "./manager.js";
+import type { RemovalAdapter } from "../source/removal.js";
 
 export class TimeoutAdapter {
   private listenerId?: number;
 
-  constructor(private settingsManager: SettingsManager) {}
+  constructor(
+    private settingsManager: SettingsManager,
+    private removalAdapter: RemovalAdapter,
+  ) {}
 
   createHook(): UpdateNotificationTimeoutHook {
     const settingsManager = this.settingsManager;
+    const removalAdapter = this.removalAdapter;
 
-    return (_original, timeout) => {
+    return (_original, timeout, { tray }) => {
+      const notification = (tray as any)._notification;
+      if (notification && removalAdapter.isTracked(notification)) {
+        const sourceTitle = notification.source?.title ?? "";
+        const config = settingsManager.getConfigurationFor(
+          sourceTitle,
+          notification.title ?? "",
+          notification.body ?? "",
+        );
+        const patternTimeout = config.timeout.enabled && config.timeout.notificationTimeout > 0
+          ? config.timeout.notificationTimeout
+          : settingsManager.notificationTimeout;
+        return patternTimeout > 0 ? patternTimeout : timeout;
+      }
+
       if (timeout !== null && timeout > 0) {
-        return settingsManager.notificationTimeout > 0
+        const newTimeout = settingsManager.notificationTimeout > 0
           ? settingsManager.notificationTimeout
-          : null;
+          : timeout;
+        return newTimeout;
       }
 
       return timeout;

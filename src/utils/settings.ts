@@ -96,6 +96,7 @@ type SettingsEvents = {
   notificationTimeoutChanged: [number];
   ignoreIdleChanged: [boolean];
   alwaysNormalUrgencyChanged: [boolean];
+  autoRemovalTimeoutChanged: [number];
 };
 
 export class SettingsManager {
@@ -110,6 +111,7 @@ export class SettingsManager {
   private _notificationTimeout = 4000;
   private _ignoreIdle = true;
   private _alwaysNormalUrgency = false;
+  private _autoRemovalTimeout = 0;
   private _globalConfiguration: GlobalConfiguration =
     SettingsManager.defaultGlobalConfiguration();
   private _patterns: PatternConfiguration[] = [];
@@ -232,6 +234,10 @@ export class SettingsManager {
 
   get alwaysNormalUrgency() {
     return this._alwaysNormalUrgency;
+  }
+
+  get autoRemovalTimeout() {
+    return this._autoRemovalTimeout;
   }
 
   get notificationPosition() {
@@ -394,6 +400,7 @@ export class SettingsManager {
     this._ignoreIdle = this._globalConfiguration.timeout.ignoreIdle;
     this._alwaysNormalUrgency =
       this._globalConfiguration.urgency.alwaysNormalUrgency;
+    this._autoRemovalTimeout = this.settings.get_int("auto-removal-timeout");
   }
 
   private listen() {
@@ -414,6 +421,7 @@ export class SettingsManager {
       this.events.emit("notificationTimeoutChanged", this._notificationTimeout);
       this.events.emit("ignoreIdleChanged", this._ignoreIdle);
       this.events.emit("alwaysNormalUrgencyChanged", this._alwaysNormalUrgency);
+      this.events.emit("autoRemovalTimeoutChanged", this._autoRemovalTimeout);
     };
 
     this.settingSignals.push(
@@ -426,6 +434,12 @@ export class SettingsManager {
       this.settings.connect("changed::patterns", () => {
         this.load();
         emitChanges();
+      }),
+    );
+    this.settingSignals.push(
+      this.settings.connect("changed::auto-removal-timeout", () => {
+        this._autoRemovalTimeout = this.settings.get_int("auto-removal-timeout");
+        this.events.emit("autoRemovalTimeoutChanged", this._autoRemovalTimeout);
       }),
     );
   }

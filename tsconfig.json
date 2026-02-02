@@ -18,6 +18,7 @@
     "importHelpers": true,
     "maxNodeModuleJsDepth": 2,
     "declaration": false,
+    "rootDir": "./src",
     "outDir": "./dist"
   },
   "include": ["src/**/*"]
